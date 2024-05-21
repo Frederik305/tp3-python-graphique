@@ -36,7 +36,6 @@ def connection():
         # Connect to the database or create it if it doesn't exist
         conn = sqlite3.connect(database_name)
         c = conn.cursor()
-
         # Create the table if it doesn't exist
         c.execute('''CREATE TABLE IF NOT EXISTS Planets (
                         Nom TEXT,
@@ -47,7 +46,6 @@ def connection():
                         Satellites TEXT,
                         Image TEXT
                     )''')
-
         conn.commit()
         return conn
     except sqlite3.Error as e:
