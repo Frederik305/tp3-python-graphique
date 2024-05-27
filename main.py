@@ -32,8 +32,14 @@ def image_to_base64(image_path):
         base64_str = base64.b64encode(img_data)
         image = base64_str.decode('utf-8')
     # Activer les boutons après avoir chargé l'image
-    button_add.config(state=NORMAL)
-    button_save.config(state=NORMAL)
+    try:
+        button_add.config(state=NORMAL)
+    except NameError:
+        pass
+    try:
+        button_save.config(state=NORMAL)
+    except NameError:
+        pass
 
 def select_image():
     # Fonction pour sélectionner une image à partir d'un navigateur de fichiers
@@ -94,6 +100,7 @@ def ReadDB():
     # Effacer le Treeview
     for item in my_tree.get_children():
         my_tree.delete(item)
+    clear_search_text()
     # Récupérer les données depuis la base de données
     Resultat = SQLRequest("SELECT * FROM Planets")
     if Resultat:
@@ -147,7 +154,7 @@ def modifyToDB(Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image, 
 
 def deleteFromDB():
     # Fonction pour supprimer un enregistrement de la base de données
-    confirmation = messagebox_confirmation("Are you sure you want to delete?")
+    confirmation = messagebox_confirmation("Es-tu sûr de vouloir supprimer la planète?")
     if confirmation:
         global selected_item_list
         if not selected_item_list:
@@ -388,6 +395,9 @@ def modify_Toplevel():
     textBox_Satellites.insert(0, selected_item_list[5])
     update_scroll_region(None)
 
+
+
+
 # Création de la fenêtre principale de l'application
 root = Tk()
 root.iconbitmap("application.ico")
@@ -544,6 +554,8 @@ textBox_search = Entry(buttons_frame, width=16)
 textBox_search.bind("<KeyRelease>", lambda event: searchFromDB(textBox_search.get()))
 textBox_search.grid(row=0, column=4)
 
+def clear_search_text():
+    textBox_search.delete(0, 'end')
 
 # Lire les données de la base de données et afficher dans le Treeview
 ReadDB()
