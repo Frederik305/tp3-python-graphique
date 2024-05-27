@@ -138,6 +138,12 @@ def modifyToDB(Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image, 
         return
     if window_modify:
         window_modify.destroy()
+    try:
+        # Fermer la fenêtre d'ajout si elle est ouverte
+        if window_display.winfo_exists():
+            window_display.destroy()
+    except NameError:
+        pass
     # Requête pour modifier un enregistrement dans la base de données
     query = """
     UPDATE Planets
@@ -441,7 +447,7 @@ def item_selected(event):
     
     # Fermer la fenêtre d'affichage si elle est ouverte
     try:
-        if window_display:
+        if window_display.winfo_exists():
             window_display.destroy()
     except NameError:
         print("No existing window")
