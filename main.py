@@ -1,11 +1,14 @@
 from tkinter import ttk
 from tkinter import filedialog
-
 from tkinter import *
-import os
-from PIL import Image
 import base64
 import sqlite3
+from tkinter import messagebox
+from ttkbootstrap import Style
+
+def messagebox_confirmation(message):
+    confirmation = messagebox.askyesno("Confirmation", message)
+    return confirmation
 
 def center_window(window):
     window.update_idletasks()
@@ -24,6 +27,9 @@ def image_to_base64(image_path):
         img_data = img_file.read()
         base64_str = base64.b64encode(img_data)
         image = base64_str.decode('utf-8')
+    # Enable the add/save button after selecting an image
+    button_add.config(state=NORMAL)
+    button_save.config(state=NORMAL)
 
 def select_image():
     file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg;*.jpeg")])
@@ -89,9 +95,13 @@ def ReadDB():
             else:
                 print("Incomplete record:", record)
 
+
 def addToDB(Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image):
     global image, window_add
-    if(window_add):
+    if image is None:
+        messagebox.showwarning("Warning", "Please select an image before adding.")
+        return
+    if window_add:
         window_add.destroy()
     query = """
     INSERT INTO Planets (Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image)
@@ -100,13 +110,14 @@ def addToDB(Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image):
     params = (Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image)
     SQLRequest(query, params)
     ReadDB()
-    image = NONE
-    if window_add:
-        window_add.destroy()
+    image = None
 
 def modifyToDB(Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image, old_Nom, old_Type, old_Distance, old_Temperature, old_Atmosphere, old_Satellites, old_Image):
     global image, window_modify
-    if(window_modify):
+    if image is None:
+        messagebox.showwarning("Warning", "Please select an image before saving.")
+        return
+    if window_modify:
         window_modify.destroy()
     query = """
     UPDATE Planets
@@ -116,41 +127,44 @@ def modifyToDB(Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image, 
     params = (Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image, old_Nom, old_Type, old_Distance, old_Temperature, old_Atmosphere, old_Satellites, old_Image)
     SQLRequest(query, params)
     ReadDB()
-    image = NONE
-    if window_modify:
-        window_modify.destroy()
+    image = None
+    my_tree.config(selectmode='extended')
 
 def deleteFromDB():
-    global selected_item_list
-    if not selected_item_list:
+    confirmation = messagebox_confirmation("Est-tu sur de vouloir supprimer?")
+    if confirmation:
+        global selected_item_list
+        if not selected_item_list:
+            return
+
+        query = """
+        DELETE FROM Planets
+        WHERE Nom = ? AND Type = ? AND Distance = ? AND Temperature = ? AND Atmosphere = ? AND Satellites = ? AND Image = ?
+        """
+        params = tuple(selected_item_list)
+        SQLRequest(query, params)
+        ReadDB()
+        selected_item_list.clear()
+    else:
         return
-    
-    query = """
-    DELETE FROM Planets
-    WHERE Nom = ? AND Type = ? AND Distance = ? AND Temperature = ? AND Atmosphere = ? AND Satellites = ? AND Image = ?
-    """
-    params = tuple(selected_item_list)
-    SQLRequest(query, params)
-    ReadDB()
-    selected_item_list.clear()
 
 def searchFromDB(search_term):
     for item in my_tree.get_children():
         my_tree.delete(item)
     
     query = """
-    SELECT Nom, Type, Distance, Temperature, Satellites
+    SELECT Nom, Type, Distance, Temperature, Atmosphere, Satellites, Image
     FROM Planets 
-    WHERE Nom LIKE ? OR Type LIKE ? OR Distance LIKE ? OR Temperature LIKE ? OR Satellites LIKE ?
+    WHERE Nom LIKE ? OR Type LIKE ? OR Distance LIKE ? OR Temperature LIKE ? OR Atmosphere LIKE ? OR Satellites LIKE ?
     """
-    params = (f"%{search_term}%",) * 5
+    params = (f"%{search_term}%",) * 6
     Resultat = SQLRequest(query, params)
     if Resultat:
         for record in Resultat:
             my_tree.insert(parent='', index='end', values=record)
 
 def add_Toplevel():
-    global window_add, window_modify
+    global window_add, window_modify, button_add
 
     if 'window_add' in globals():
         window_add.destroy()
@@ -171,7 +185,7 @@ def add_Toplevel():
     root_height = root.winfo_height()
     window_add_width = 400
     window_add_height = 300
-    window_add_x = root_x + root_width + 4
+    window_add_x = root_x + root_width + 2
     window_add_y = root_y + (root_height - window_add_height) // 2
 
     window_add.geometry(f"{window_add_width}x{window_add_height}+{window_add_x}+{window_add_y}")
@@ -179,7 +193,7 @@ def add_Toplevel():
     canvas = Canvas(window_add)
     canvas.pack(side=LEFT, fill=BOTH, expand=True)
 
-    scrollbar = Scrollbar(window_add, orient=VERTICAL, command=canvas.yview)
+    scrollbar = ttk.Scrollbar(window_add, orient=VERTICAL, command=canvas.yview, style="Vertical.TScrollbar")
     scrollbar.pack(side=RIGHT, fill=Y)
 
     canvas.configure(yscrollcommand=scrollbar.set)
@@ -234,7 +248,7 @@ def add_Toplevel():
 
     button_cancel = Button(frame, text="Annuler", command=window_add.destroy)
     button_cancel.grid(row=7, column=0, padx=10, pady=10, sticky='e')
-    button_add = Button(frame, text="Ajouter", command=lambda: addToDB(textBox_nom.get(), textBox_Type.get(), textBox_Distance.get(), textBox_Temperature.get(), textBox_Atmosphere.get(), textBox_Satellites.get(), image))
+    button_add = Button(frame, text="Ajouter", state=DISABLED, command=lambda: addToDB(textBox_nom.get(), textBox_Type.get(), textBox_Distance.get(), textBox_Temperature.get(), textBox_Atmosphere.get(), textBox_Satellites.get(), image))
     button_add.grid(row=7, column=1, padx=10, pady=10, sticky='w')
     update_scroll_region(None)
 
@@ -247,7 +261,7 @@ def check_modify_Toplevel():
         print("aucun item selectionner")
 
 def modify_Toplevel():
-    global selected_item_list, window_modify, window_add
+    global selected_item_list, window_modify, window_add, button_save
 
     if 'window_modify' in globals():
         window_modify.destroy()
@@ -256,8 +270,7 @@ def modify_Toplevel():
             window_add.destroy()
     except NameError:
         pass
-    
-    old_image = selected_item_list[6]
+
 
     window_modify = Toplevel()
     window_modify.title("Modifier une planète")
@@ -269,7 +282,7 @@ def modify_Toplevel():
     root_height = root.winfo_height()
     window_modify_width = 400
     window_modify_height = 300
-    window_modify_x = root_x + root_width + 4
+    window_modify_x = root_x + root_width + 2
     window_modify_y = root_y + (root_height - window_modify_height) // 2
 
     window_modify.geometry(f"{window_modify_width}x{window_modify_height}+{window_modify_x}+{window_modify_y}")
@@ -277,7 +290,7 @@ def modify_Toplevel():
     canvas = Canvas(window_modify)
     canvas.pack(side=LEFT, fill=BOTH, expand=True)
 
-    scrollbar = Scrollbar(window_modify, orient=VERTICAL, command=canvas.yview)
+    scrollbar = ttk.Scrollbar(window_modify, orient=VERTICAL, command=canvas.yview, style="Vertical.TScrollbar")
     scrollbar.pack(side=RIGHT, fill=Y)
 
     canvas.configure(yscrollcommand=scrollbar.set)
@@ -298,37 +311,31 @@ def modify_Toplevel():
     label_nom = Label(frame, text="Nom :")
     label_nom.grid(row=0, column=0, padx=10, pady=10, sticky='w')
     textBox_nom = Entry(frame, width=32)
-    textBox_nom.insert(0, selected_item_list[0])
     textBox_nom.grid(row=0, column=1, padx=10, pady=10)
 
     label_Type = Label(frame, text="Type :")
     label_Type.grid(row=1, column=0, padx=10, pady=10, sticky='w')
     textBox_Type = Entry(frame, width=32)
-    textBox_Type.insert(0, selected_item_list[1])
     textBox_Type.grid(row=1, column=1, padx=10, pady=10)
 
     label_Distance = Label(frame, text="Distance :")
     label_Distance.grid(row=2, column=0, padx=10, pady=10, sticky='w')
     textBox_Distance = Entry(frame, width=32)
-    textBox_Distance.insert(0, selected_item_list[2])
     textBox_Distance.grid(row=2, column=1, padx=10, pady=10)
 
     label_Temperature = Label(frame, text="Temperature :")
     label_Temperature.grid(row=3, column=0, padx=10, pady=10, sticky='w')
     textBox_Temperature = Entry(frame, width=32)
-    textBox_Temperature.insert(0, selected_item_list[3])
     textBox_Temperature.grid(row=3, column=1, padx=10, pady=10)
 
     label_Atmosphere = Label(frame, text="Atmosphere :")
     label_Atmosphere.grid(row=4, column=0, padx=10, pady=10, sticky='w')
     textBox_Atmosphere = Entry(frame, width=32)
-    textBox_Atmosphere.insert(0, selected_item_list[4])
     textBox_Atmosphere.grid(row=4, column=1, padx=10, pady=10)
 
     label_Satellites = Label(frame, text="Satellites :")
     label_Satellites.grid(row=5, column=0, padx=10, pady=10, sticky='w')
     textBox_Satellites = Entry(frame, width=32)
-    textBox_Satellites.insert(0, selected_item_list[5])
     textBox_Satellites.grid(row=5, column=1, padx=10, pady=10)
 
     label_Image = Label(frame, text="Image :")
@@ -338,22 +345,33 @@ def modify_Toplevel():
 
     button_cancel = Button(frame, text="Annuler", command=window_modify.destroy)
     button_cancel.grid(row=7, column=0, padx=10, pady=10, sticky='e')
-    button_add = Button(frame, text="Sauvegarder", command=lambda: modifyToDB(textBox_nom.get(), textBox_Type.get(), textBox_Distance.get(), textBox_Temperature.get(), textBox_Atmosphere.get(), textBox_Satellites.get(), image, selected_item_list[0], selected_item_list[1], selected_item_list[2], selected_item_list[3], selected_item_list[4], selected_item_list[5], old_image))
-    button_add.grid(row=7, column=1, padx=10, pady=10, sticky='w')
+    button_save = Button(frame, text="Sauvegarder", state=DISABLED, command=lambda: modifyToDB(textBox_nom.get(), textBox_Type.get(), textBox_Distance.get(), textBox_Temperature.get(), textBox_Atmosphere.get(), textBox_Satellites.get(), image, selected_item_list[0], selected_item_list[1], selected_item_list[2], selected_item_list[3], selected_item_list[4], selected_item_list[5], selected_item_list[6]))
+    button_save.grid(row=7, column=1, padx=10, pady=10, sticky='w')
+
+    textBox_nom.insert(0, selected_item_list[0])
+    textBox_Type.insert(0, selected_item_list[1])
+    textBox_Distance.insert(0, selected_item_list[2])
+    textBox_Temperature.insert(0, selected_item_list[3])
+    textBox_Atmosphere.insert(0, selected_item_list[4])
+    textBox_Satellites.insert(0, selected_item_list[5])
     update_scroll_region(None)
 
-
 root = Tk()
+
+root.iconbitmap("application.ico")
+
 root.resizable(False, False)
+root.title("Planetes")
+style = Style("darkly")
+style.master = root
 # Créer un frame pour le treeview
 tree_frame = Frame(root)
 tree_frame.pack(pady=10, padx=10)
 # Créer une barre de défilement
-tree_scroll = Scrollbar(tree_frame)
+tree_scroll = ttk.Scrollbar(tree_frame)
 tree_scroll.pack(side=RIGHT, fill=Y)
 # Créer le widget Treeview
-my_tree = ttk.Treeview(tree_frame, yscrollcommand=tree_scroll.set,
-selectmode="extended")
+my_tree = ttk.Treeview(tree_frame, yscrollcommand=tree_scroll.set, selectmode="extended")
 my_tree.pack()
 # Configurer la barre de défilement
 tree_scroll.config(command=my_tree.yview)
@@ -382,6 +400,11 @@ def item_selected(event):
     global selected_item_list
 
     try:
+        if window_modify.winfo_exists():
+            window_modify.destroy()
+    except NameError:
+        pass
+    try:
         if window_display:
             window_display.destroy()
     except NameError:
@@ -401,6 +424,7 @@ def item_selected(event):
 def display_selected_item(selected_item_list):
     global window_display
     window_display = Toplevel()
+
     window_display.title(f"Planète {selected_item_list[0]}")
     window_display.resizable(False, False)
     
@@ -418,7 +442,7 @@ def display_selected_item(selected_item_list):
     canvas = Canvas(window_display)
     canvas.pack(side=LEFT, fill=BOTH, expand=True)
 
-    scrollbar = Scrollbar(window_display, orient=VERTICAL, command=canvas.yview)
+    scrollbar = ttk.Scrollbar(window_display, orient=VERTICAL, command=canvas.yview, style="Vertical.TScrollbar")
     scrollbar.pack(side=RIGHT, fill=Y)
 
     canvas.configure(yscrollcommand=scrollbar.set)
@@ -464,15 +488,17 @@ buttons_frame = Frame(root)
 center_window(root)
 buttons_frame.pack(padx=10, pady=10)
 # Créer les boutons
-button_add = Button(buttons_frame, text="Add", command=add_Toplevel)
+button_add = Button(buttons_frame, text="Ajouter", command=add_Toplevel)
 button_add.grid(row=0, column=0)
-button_modify = Button(buttons_frame, text="Modify", command=check_modify_Toplevel)
+button_modify = Button(buttons_frame, text="Modifier", command=check_modify_Toplevel)
 button_modify.grid(row=0, column=1)
-button_delete = Button(buttons_frame, text="Delete", command=deleteFromDB)
+button_delete = Button(buttons_frame, text="Supprimer", command=deleteFromDB)
 button_delete.grid(row=0, column=2)
-textBox_search = Entry(buttons_frame, width=32)
+label_search = Label(buttons_frame, text="Rechercher : ", padx=10)
+label_search.grid(row=0, column=3)
+textBox_search = Entry(buttons_frame, width=16)
 textBox_search.bind("<KeyRelease>", lambda event: searchFromDB(textBox_search.get()))
-textBox_search.grid(row=0, column=3)
+textBox_search.grid(row=0, column=4)
 
 
 ReadDB()
